@@ -1,9 +1,9 @@
-# from concurrent.futures import ThreadPoolExecutor, as_completed
 from tqdm import tqdm
 
 from lib.engines import BinanceOHLCVFetcher
 from lib.datasets import fill_empty_rows_volume_zero
 from lib.utils import save_ohlcv_to_csv
+# from concurrent.futures import ThreadPoolExecutor, as_completed
 
 
 ticker = "SEIUSDT"      # ALL로 하면 모든 종목 가져옴
@@ -46,6 +46,7 @@ if __name__ == '__main__':
                 #             print(f"Error fetching data for {ticker}: {e}")
         else:
             process_ticker(fetcher, ticker, fill_empty)
+
     except Exception as e:
         print("잘못된 입력", e)
 
