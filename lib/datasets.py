@@ -1,8 +1,4 @@
-import time
-import requests
 import pandas as pd
-
-from tqdm import tqdm
 
 
 def get_empty_rows(df):
@@ -27,76 +23,43 @@ def get_empty_rows(df):
     return empty_rows_timestamp
 
 def fill_empty_rows_volume_zero(df):
-    """
-    비어있는 timestamp를 검사하여 ohlc 값을 이전 값의 종가, 거래량을 0으로 채워서 Pandas DataFrame으로 반환하는 메서드
-    
-    :param df: 검사하고 채워넣을 Pandas DataFrame
-    :return: Pandas DataFrame
-    """
-    df.loc[:, 'timestamp'] = pd.to_datetime(df['timestamp'])
+    df.reset_index(inplace=True)
 
-    ets = get_empty_rows(df)
-    ets = sorted(ets)
-    ets = pd.to_datetime(ets)
-    
-    for i in tqdm(range(len(ets)), desc="Filling empty"):
-        et = ets[i]
-        pt = et - pd.Timedelta(minutes=1)
-        
-        a = df[df['timestamp'] == pt]
-        a.loc[:, 'timestamp'] = et
-        a.loc[:, 'volume'] = 0
+    # 'timestamp' 열을 datetime 객체로 변환
+    df['timestamp'] = pd.to_datetime(df['timestamp'])
 
-        df = pd.concat([df, a])
-        df.sort_values(by='timestamp', inplace=True)
-        df.reset_index(inplace=True, drop=True)
-        
-    return df
+    # 데이터 주기 계산
+    df['delta'] = df['timestamp'].diff()  # 인접한 timestamp 간의 차이 계산
+    common_delta = df['delta'].mode()[0]  # 가장 흔한 차이(주기) 계산
 
-def fill_empty_rows_mean(self, df):
-    """
-    비어있는 행을 검사하여 ohlcv 값을 이전 값과 다음 값의 평균으로 채워서 Pandas DataFrame을 반환하는 메서드
-    
-    :param df: 검사하고 채워넣을 Pandas DataFrame
-    :return: Pandas DataFrame
-    """
-    empty_rows_timestamp = get_empty_rows(df)
+    # 완전한 timestamp 시퀀스 생성
+    full_range = pd.date_range(start=df['timestamp'].min(), end=df['timestamp'].max(), freq=common_delta)
 
-    url = "https://api.upbit.com/v1/market/all?isDetails=false"
-    headers = {"accept": "application/json"}
-    response = requests.get(url, headers=headers)
-    tickers = response.json()
-    
-    self.params['count'] = 1
+    # 새로운 DataFrame 생성 및 기존 데이터 병합
+    new_df = pd.DataFrame(full_range, columns=['timestamp'])
+    df = new_df.merge(df, on='timestamp', how='left')
 
-    data_list = []
-    for timestamp in tqdm(empty_rows_timestamp):
-        self.params['to'] = timestamp
+    # 누락된 'close' 값들 채우기
+    df['close'].ffill(inplace=True)
 
-        response = requests.get(self.url, headers=self.headers, params=self.params)
-        data = response.json()
+    # 'open', 'high', 'low'가 NaN이고 'close'에 값이 있는 행 찾기
+    mask = df['open'].isna() & df['high'].isna() & df['low'].isna() & df['close'].notna()
 
-        if len(data) == 0:
-            break
+    # 해당 행들의 'open', 'high', 'low'를 'close' 값으로 채우기
+    df.loc[mask, ['open', 'high', 'low']] = df.loc[mask, 'close']
 
-        data_list.extend(data)
+    # 데이터에 adjclose 있으면 수행
+    if 'adjclose' in df.columns:
+        adjmask = df['adjclose'].isna() & df['close'].notna()
+        df.loc[adjmask, ['adjclose']] = df.loc[adjmask, 'close']
 
-        time.sleep(0.1)
+    # 누락된 'volume' 값 채우기
+    df['volume'] = df['volume'].fillna(0)
 
+    # 불필요한 'delta' 열 삭제
+    df.drop(columns=['delta'], inplace=True)
 
-    fill_df = pd.DataFrame(data_list)
-    fill_df = fill_df[['candle_date_time_utc', 'opening_price', 'high_price', 'low_price', 'trade_price', 'candle_acc_trade_volume']]
-    fill_df = fill_df.rename(columns={
-        'candle_date_time_utc' : 'timestamp', 
-        'opening_price' : 'open',
-        'high_price' : 'high', 
-        'low_price' : 'low', 
-        'trade_price' : 'close', 
-        'candle_acc_trade_volume' : 'volume',
-    })
-
-    df = pd.concat([df, fill_df])
-    df.sort_values(by='timestamp', inplace=True)
-    df.reset_index(inplace=True, drop=True)
+    # index를 timestamp로
+    df.set_index('timestamp', inplace=True)
 
     return df

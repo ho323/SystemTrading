@@ -9,7 +9,7 @@ class UpbitOHLCVFetcher:
     def __init__(self):
         pass
 
-    def get_all_tickers(self, isDetails=False):
+    def get_all_tickers_list(self, isDetails=False):
         """
         업비트 전 종목의 ticker를 가져오는 메서드
         :param is_details: 유의종목 필드과 같은 상세 정보 노출 여부(선택 파라미터)
@@ -23,7 +23,9 @@ class UpbitOHLCVFetcher:
         response = requests.get(url, headers=headers)
         tickers = response.json()
 
-        return tickers
+        tickers_list = [item['market'] for item in tickers if 'market' in item and item['market'].startswith('KRW-')]
+
+        return tickers_list
 
     def convert_list_to_df(self, data_list):
         
@@ -41,9 +43,51 @@ class UpbitOHLCVFetcher:
         df = df[::-1].reset_index(drop=True)
         df = df.set_index('timestamp')
 
-
         return df
 
+    def get_ohlcv(self, ticker, interval="days", end_date=datetime.now()):
+        """
+        과거 모든 OHLCV 데이터를 Pandas DataFrame으로 가져오는 메서드
+
+        :param ticker: 티커 ('KRW-BTC', 'KRW-ETH' 등)
+        :param interval: 1m, 3m, 5m, 10m, 15m, 30m, 60m, 240m, days, weeks, months (기본값: days)
+        :param end_date: 수집할 마지막 캔들 시간의 datetime 비우면 현재 시간
+        :return: Pandas DataFrame
+        """
+        url = f"https://api.upbit.com/v1/candles"
+        if interval[-1] == 'm':
+            url = f"{url}/minutes/{interval[:-1]}"
+        else:
+            url = f"{url}/{interval}"
+        params = {
+            "market": ticker,
+            "count": 200, 
+            "to": end_date.strftime("%Y-%m-%dT%H:%M:%S"),
+        }
+        headers = {"accept": "application/json"}
+
+        # print(f"[Upbit] {ticker} {interval} OHLCV 수집 시작")
+
+        data_list = []
+        while True:
+            response = requests.get(url, headers=headers, params=params)
+            data = response.json()
+
+            if len(data) == 0:
+                break
+
+            data_list.extend(data)
+            dt = data[-1]['candle_date_time_utc']
+            params['to'] = dt
+
+            time.sleep(0.11)
+
+        df = self.convert_list_to_df(data_list)
+
+        print(f"[Upbit] {ticker} {interval} OHLCV 수집 완료")
+
+        return df
+    
     def get_current_ohlcv(self, ticker, interval="days", count=1):
         """
         현재 OHLCV 데이터를 Pandas DataFrame으로 가져오는 메서드
@@ -70,72 +114,11 @@ class UpbitOHLCVFetcher:
 
         return df
 
-    def get_ohlcv(self, ticker, interval="days", end_date=datetime.now()):
-        """
-        과거 모든 OHLCV 데이터를 Pandas DataFrame으로 가져오는 메서드
-
-        :param ticker: 티커 ('KRW-BTC', 'KRW-ETH' 등)
-        :param interval: 1m, 3m, 5m, 10m, 15m, 30m, 60m, 240m, days, weeks, months (기본값: days)
-        :param end_date: 수집할 마지막 캔들 시간의 datetime 비우면 현재 시간
-        :return: Pandas DataFrame
-        """
-        url = f"https://api.upbit.com/v1/candles"
-        if interval[-1] == 'm':
-            url = f"{url}/minutes/{interval[:-1]}"
-        else:
-            url = f"{url}/{interval}"
-        params = {
-            "market": ticker,
-            "count": 200, 
-            "to": end_date.strftime("%Y-%m-%dT%H:%M:%S"),
-        }
-        headers = {"accept": "application/json"}
-
-        print(f"{ticker} {interval} OHLCV 수집 시작")
-
-        data_list = []
-        while True:
-            response = requests.get(url, headers=headers, params=params)
-            data = response.json()
-
-            if len(data) == 0:
-                break
-
-            data_list.extend(data)
-            dt = data[-1]['candle_date_time_utc']
-            params['to'] = dt
-
-            time.sleep(0.11)
-
-        df = self.convert_list_to_df(data_list)
-
-        print(f"{ticker} {interval} OHLCV 수집 완료")
-
-        return df
   
 
 class YHFOHLCVFetcher:
     def __init__(self):
         pass
-
-    def get_current_ohlcv(self, ticker, interval="1d", count=0):
-        url = f"https://query1.finance.yahoo.com/v7/finance/download/{ticker}"
-        params = f"?interval={interval}&events=history&includeAdjustedClose=true"
-        
-        df = pd.read_csv(url+params, parse_dates=True)
-        df = df[['Date', 'Open', 'High', 'Low', 'Close', 'Adj Close', 'Volume']]
-        df = df.rename(columns={
-            'Date' : 'timestamp', 
-            'Open' : 'open',
-            'High' : 'high', 
-            'Low' : 'low', 
-            'Close' : 'close', 
-            'Adj Close' : 'adjclose',
-            'Volume' : 'volume',
-        })
-        df = df.set_index('timestamp')
-
-        return df
 
     def get_ohlcv(self, ticker, interval="1d", start_date=None, end_date=None):
         """
@@ -180,6 +163,25 @@ class YHFOHLCVFetcher:
         df = df.set_index('timestamp')
 
 
-        print(f"{ticker} {interval} 수집 완료")
+        print(f"[YahooFinance] {ticker} {interval} 수집 완료")
+
+        return df
+    
+    def get_current_ohlcv(self, ticker, interval="1d", count=1):
+        url = f"https://query1.finance.yahoo.com/v7/finance/download/{ticker}"
+        params = f"?interval={interval}&events=history&includeAdjustedClose=true"
+        
+        df = pd.read_csv(url+params, parse_dates=True)
+        df = df[['Date', 'Open', 'High', 'Low', 'Close', 'Adj Close', 'Volume']]
+        df = df.rename(columns={
+            'Date' : 'timestamp', 
+            'Open' : 'open',
+            'High' : 'high', 
+            'Low' : 'low', 
+            'Close' : 'close', 
+            'Adj Close' : 'adjclose',
+            'Volume' : 'volume',
+        })
+        df = df.set_index('timestamp')
 
         return df
