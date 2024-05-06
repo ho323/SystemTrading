@@ -21,6 +21,7 @@ def save_ohlcv_to_pkl(data, file_name):
         store.loc[overlap_index] = temp.loc[overlap_index]
 
         store.to_pickle(store_path)
+        os.remove(temp_path)
 
 
 def load_ohlcv_pkl(file_path: str):
