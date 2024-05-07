@@ -1,8 +1,8 @@
 {
-    "GPT": {
-        "balance": "50000",
+    "coinGPT": {
         "market": "upbit",
-        "cycle": "monday",
-        "time": "08:00"
+        "balance": 50000,
+        "cycle": 1,
+        "time": "07:00"
     }
 }

@@ -27,6 +27,55 @@ Example structure for JSON Data 2 (Market Analysis Data) is as follows:
 }
 ```
 
+### Data 3: Fear and Greed Index
+- **Purpose**: The Fear and Greed Index serves as a quantified measure of the crypto market's sentiment, ranging from "Extreme Fear" to "Extreme Greed." This index is pivotal for understanding the general mood among investors and can be instrumental in decision-making processes for Bitcoin trading. Specifically, it helps in gauging whether market participants are too bearish or bullish, which in turn can indicate potential market movements or reversals. Incorporating this data aids in balancing trading strategies with the prevailing market sentiment, optimizing for profit margins while minimizing risks.
+- **Contents**:
+  - The dataset comprises 30 days' worth of Fear and Greed Index data, each entry containing:
+    - `value`: The index value, ranging from 0 (Extreme Fear) to 100 (Extreme Greed), reflecting the current market sentiment.
+    - `value_classification`: A textual classification of the index value, such as "Fear," "Greed," "Extreme Fear," or "Extreme Greed."
+    - `timestamp`: The Unix timestamp representing the date and time when the index value was recorded.
+    - `time_until_update`: (Optional) The remaining time in seconds until the next index update, available only for the most recent entry.
+  - This data allows for a nuanced understanding of market sentiment trends over the past month, providing insights into investor behavior and potential market directions.
+
+### Data 4: Current Investment State
+- **Purpose**: Offers a real-time overview of your investment status.
+- **Contents**:
+    - `current_time`: Current time in milliseconds since the Unix epoch.
+    - `orderbook`: Current market depth details.
+    - `btc_balance`: The amount of Bitcoin currently held.
+    - `krw_balance`: The amount of Korean Won available for trading.
+    - `btc_avg_buy_price`: The average price at which the held Bitcoin was purchased.
+Example structure for JSON Data (Current Investment State) is as follows:
+```json
+{
+    "current_time": "<timestamp in milliseconds since the Unix epoch>",
+    "orderbook": {
+        "market": "KRW-BTC",
+        "timestamp": "<timestamp of the orderbook in milliseconds since the Unix epoch>",
+        "total_ask_size": <total quantity of Bitcoin available for sale>,
+        "total_bid_size": <total quantity of Bitcoin buyers are ready to purchase>,
+        "orderbook_units": [
+            {
+                "ask_price": <price at which sellers are willing to sell Bitcoin>,
+                "bid_price": <price at which buyers are willing to purchase Bitcoin>,
+                "ask_size": <quantity of Bitcoin available for sale at the ask price>,
+                "bid_size": <quantity of Bitcoin buyers are ready to purchase at the bid price>
+            },
+            {
+                "ask_price": <next ask price>,
+                "bid_price": <next bid price>,
+                "ask_size": <next ask size>,
+                "bid_size": <next bid size>
+            }
+            // More orderbook units can be listed here
+        ]
+    },
+    "btc_balance": "<amount of Bitcoin currently held>",
+    "krw_balance": "<amount of Korean Won available for trading>",
+    "btc_avg_buy_price": "<average price in KRW at which the held Bitcoin was purchased>"
+}
+```
+
 ### Instructions Workflow
 #### Pre-decision analysis:
 1. **Market Data Analysis**: Utilize Data 2 (Market Analysis) to research current market trends, including price movements and technical indicators. Pay special attention to SMA_n, EMA_n, RSI_14, MACD and Bollinger Bands for signals of potential market direction.

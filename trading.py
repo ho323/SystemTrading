@@ -12,7 +12,7 @@ import importlib.util
 
 upbit = pyupbit.Upbit(os.getenv("UPBIT_ACCESS_KEY"), os.getenv("UPBIT_SECRET_KEY"))
 
-def execute_buy_upbit(ticker, percentage, price=None):
+def execute_buy_upbit(ticker, percentage, balance, price=None):
     """
     Upbit 매수 주문 함수
     price를 비우면 시장가 매수
@@ -32,7 +32,7 @@ def execute_buy_upbit(ticker, percentage, price=None):
     except Exception as e:
         print(f"Failed to execute buy order: {e}")
 
-def execute_sell_upbit(ticker, percentage, price=None):
+def execute_sell_upbit(ticker, percentage, balance, price=None):
     """
     Upbit 매도 주문 함수 
     price를 비우면 시장가 매도
@@ -71,23 +71,25 @@ def make_decision_and_execute(st, market, balance):
     :param st: 실행할 전략
     :param balance: 해당 전략에 할당된 가용 금액
     """
-    print("Making decision and executing...")
+    print(f"Making decision of {st} in {market} and executing...")
     try:
         ticker, action, percentage, price = excute_strategy(st)
-        percentage *= balance
         if market == "upbit":
             if action == "buy":
-                execute_buy_upbit(ticker, percentage, price)
+                execute_buy_upbit(ticker, percentage, balance, price)
             elif action == "sell":
-                execute_sell_upbit(ticker, percentage, price)
-        # elif market == "yahoo":
-        #     pass
-        # elif market == "binance":
-        #     pass
-        # elif market == "yahoo":
-        #     pass
+                execute_sell_upbit(ticker, percentage, balance, price)
+        elif market == "yahoo":
+            return
+        elif market == "binance":
+            return
+        elif market == "yahoo":
+            return
         else:
             print(f"{market} is not available market")
+            return
+
+        return ticker, action, percentage, price
     except Exception as e:
         print(f"Failed to make decisions in strategies: {e}")
 

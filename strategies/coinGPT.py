@@ -1,6 +1,7 @@
 import os
 from dotenv import load_dotenv
 load_dotenv()
+import requests
 import pyupbit
 import pandas as pd
 import pandas_ta as ta
@@ -8,14 +9,13 @@ import json
 from openai import OpenAI
 from datetime import datetime
 import time
-import ccxt
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.service import Service
 from webdriver_manager.chrome import ChromeDriverManager
-from lib.engines import YHFOHLCVFetcher
 
 
+upbit = pyupbit.Upbit(os.getenv("UPBIT_ACCESS_KEY"), os.getenv("UPBIT_SECRET_KEY"))
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 def crawl_google_news(keyword):
@@ -74,6 +74,45 @@ def fetch_and_prepare_data(ticker):
 
     return json.dumps(df)
 
+def get_current_status():
+    orderbook = pyupbit.get_orderbook(ticker="KRW-BTC")
+    current_time = orderbook['timestamp']
+    btc_balance = 0
+    krw_balance = 0
+    btc_avg_buy_price = 0
+    balances = upbit.get_balances()
+    for b in balances:
+        if b['currency'] == "BTC":
+            btc_balance = b['balance']
+            btc_avg_buy_price = b['avg_buy_price']
+        if b['currency'] == "KRW":
+            krw_balance = b['balance']
+
+    current_status = {'current_time': current_time, 'orderbook': orderbook, 'btc_balance': btc_balance, 'krw_balance': krw_balance, 'btc_avg_buy_price': btc_avg_buy_price}
+    return json.dumps(current_status)
+
+def fetch_fear_and_greed_index(limit=1, date_format=''):
+    """
+    Fetches the latest Fear and Greed Index data.
+    Parameters:
+    - limit (int): Number of results to return. Default is 1.
+    - date_format (str): Date format ('us', 'cn', 'kr', 'world'). Default is '' (unixtime).
+    Returns:
+    - dict or str: The Fear and Greed Index data in the specified format.
+    """
+    base_url = "https://api.alternative.me/fng/"
+    params = {
+        'limit': limit,
+        'format': 'json',
+        'date_format': date_format
+    }
+    response = requests.get(base_url, params=params)
+    myData = response.json()['data']
+    resStr = ""
+    for data in myData:
+        resStr += str(data)
+    return resStr
+
 def get_instructions(file_path):
     try:
         with open(file_path, "r", encoding="utf-8") as file:
@@ -85,11 +124,13 @@ def get_instructions(file_path):
         print("An error occurred while reading the file:", e)
 
 def analyze_data_with_gpt(ticker="KRW-BTC", keyword="bitcoin", model="gpt-3.5-turbo"):
-    data_json = fetch_and_prepare_data(ticker)
-    news_json = crawl_google_news(keyword)
-
-    instructions_path = "./gpt/instructions.md"
     try:
+        data_json = fetch_and_prepare_data(ticker)
+        news_json = crawl_google_news(keyword)
+        fear_and_greed = fetch_fear_and_greed_index(limit=30)
+        current_status = get_current_status()
+
+        instructions_path = "./gpt/instructions.md"
         instructions = get_instructions(instructions_path)
         if not instructions:
             print("No instructions found.")
@@ -100,7 +141,9 @@ def analyze_data_with_gpt(ticker="KRW-BTC", keyword="bitcoin", model="gpt-3.5-tu
             messages=[
                 {"role": "system", "content": instructions},
                 {"role": "user", "content": news_json},
-                {"role": "user", "content": data_json}
+                {"role": "user", "content": data_json},
+                {"role": "user", "content": fear_and_greed},
+                {"role": "user", "content": current_status}
             ],
             response_format={"type":"json_object"}
         )
@@ -117,11 +160,14 @@ def strategy():
     advice = analyze_data_with_gpt(
         ticker=ticker, 
         keyword=keyword, 
-        model="gpt-3.5-turbo"
+        model="gpt-4-turbo-preview"
     )
 
     action = advice["decision"]
     percentage = advice["percentage"]
     price = None    # 시장가
+
+    if percentage > 1:
+        percentage /= 100
 
     return ticker, action, percentage, price
